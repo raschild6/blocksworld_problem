@@ -1,13 +1,13 @@
 ; import Date Time
 (import (srfi :19))
 
-(import (opencog ure))
-(import (opencog logger))
+(use-modules (opencog logger) (opencog ure))
 
 (load "rules.scm")
 
 
 (cog-logger-set-level! (cog-ure-logger) "fine")
+;(cog-logger-set-filename! (cog-ure-logger) "log/ure.log")
 ; Redirect the log to stdout
 (cog-logger-set-stdout! (cog-ure-logger) #t)
 
