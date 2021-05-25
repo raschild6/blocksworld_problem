@@ -129,9 +129,9 @@
 )
 
 (define rbs (ConceptNode "block-world"))
-(ure-set-maximum-iterations rbs 100)
+(ure-set-maximum-iterations rbs 500)
 ; positive: breadth first - negative: depth first - 0: neutral
-(ure-set-complexity-penalty rbs -0.9)
+(ure-set-complexity-penalty rbs -0.8)
 ; maximum number of inference trees the BIT can hold. Negative(default): unlimited.
 ;(ure-set-bc-maximum-bit-size rbs 10)
 
