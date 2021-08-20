@@ -102,14 +102,35 @@
 ;;
 (define add-old-state
 	(let* ((variables (gen-variables "$X" 3))
-			(vardecl (VariableList
-	   					(TypedVariableLink (car variables) (TypeNode "SetLink"))
-							(TypedVariableLink (car (cdr variables)) (TypeNode "ConceptNode"))
-							(TypedVariableLink (car (cdr (cdr variables))) (TypeNode "ConceptNode"))
-						)
+		(vardecl
+			(VariableList
+				(TypedVariableLink (car variables) (TypeNode "SetLink"))
+				(TypedVariableLink (car (cdr variables)) (TypeNode "ConceptNode"))
+				(TypedVariableLink (car (cdr (cdr variables))) (TypeNode "ConceptNode"))
 			)
-			(pattern
-				(PresentLink
+		)
+		(pattern
+			(PresentLink
+				(And
+					(ListLink
+						(AnchorNode "Current State")
+						(car (cdr variables))
+					)
+					(ListLink
+						(car (cdr variables))
+						(car (cdr (cdr variables)))
+					)
+					(car variables)
+				)
+			)
+		)
+		(rewrite
+			(ExecutionOutput
+				(GroundedSchema "scm: conjunction")
+				;; We wrap the variables in Set because the order
+				;; doesn't matter and that way alpha-conversion
+				;; works better.
+				(List
 					(And
 						(ListLink
 							(AnchorNode "Current State")
@@ -119,41 +140,23 @@
 							(car (cdr variables))
 							(car (cdr (cdr variables)))
 						)
+						(Set (car (cdr variables)) (car variables))
+					)
+					(And
+						(ListLink
+							(AnchorNode "Current State")
+							(car (cdr variables))
+						)
 						(car variables)
 					)
 				)
 			)
-			(rewrite (ExecutionOutput
-						  (GroundedSchema "scm: conjunction")
-						  ;; We wrap the variables in Set because the order
-						  ;; doesn't matter and that way alpha-conversion
-						  ;; works better.
-						  (List
-						  		(And
-									(ListLink
-										(AnchorNode "Current State")
-										(car (cdr variables))
-									)
-									(ListLink
-										(car (cdr variables))
-										(car (cdr (cdr variables)))
-									)
-									(Set (car (cdr variables)) (car variables))
-								)
-						  		(And
-									(ListLink
-										(AnchorNode "Current State")
-										(car (cdr variables))
-									)
-									(car variables)
-								)
-						  ))
-			))
-			(Bind
-				vardecl
-				pattern
-				rewrite
-			)
+		))
+		(Bind
+			vardecl
+			pattern
+			rewrite
+		)
 	)
 )
 
@@ -183,62 +186,42 @@
 (Concept "A on B")
 (Concept "B on A")
 
-;; All possible transition from a state to another
-(List
-	(Concept "initial state")
+(List                                   ; pickup A
 	(Concept "A B clear")
-)
-
-(List
+	(Concept "A in hand B clear"))
+(List                                   ; pickup B
 	(Concept "A B clear")
+	(Concept "B in hand A clear"))
+(List                                   ; putdown A
 	(Concept "A in hand B clear")
-)
-
-(List
-	(Concept "A B clear")
+	(Concept "A B clear"))
+(List                                   ; putdown B
 	(Concept "B in hand A clear")
-)
-
-(List
+	(Concept "A B clear"))
+(List                                   ; stack A on B
 	(Concept "A in hand B clear")
-	(Concept "A B clear")
-)
-
-(List
+	(Concept "A on B"))
+(List                                   ; stack B on A
 	(Concept "B in hand A clear")
-	(Concept "A B clear")
-)
-
-(List
-	(Concept "A in hand B clear")
+	(Concept "B on A"))
+(List                                   ; unstack A on B
 	(Concept "A on B")
-)
-
-(List
-	(Concept "B in hand A clear")
+	(Concept "A in hand B clear"))
+(List                                   ; unstack B on A
 	(Concept "B on A")
-)
-
-(List
-	(Concept "A on B")
-	(Concept "A in hand B clear")
-)
-
-(List
-	(Concept "B on A")
-	(Concept "B in hand A clear")
-)
+	(Concept "B in hand A clear"))
 
 ;; Lock the initial state with the Anchor "Current State"
 (List
 	(Anchor "Current State")
+	(Concept "initial state"))
+(List
 	(Concept "initial state")
-)
+	(Concept "A B clear"))
 
 ;; List of old states crossed
-(SetLink
-	(Concept "initial state")
-)
+(ListLink
+	(Concept "initial state"))
 
 
 ;; ----------- URE parameters -----------

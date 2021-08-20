@@ -233,237 +233,307 @@ This is an example of the STACK rule, that it would be something like:
 )
 ```
 
+
+### 2. States-Based (file Blocksworld_FSM.scm) ###
+This approach is simply a finite state machine (FSM), for now not even probabilistic (if I understand correctly).  
+The starting point are the following examples:
+
+https://github.com/opencog/atomspace/blob/master/examples/pattern-matcher/fsm-basic.scm
+https://github.com/opencog/atomspace/blob/master/examples/pattern-matcher/fsm-full.scm
+https://github.com/opencog/atomspace/blob/master/examples/pattern-matcher/fsm-mealy.scm
+https://github.com/opencog/atomspace/blob/master/examples/pattern-matcher/markov-chain.scm
+
+This is probably the best way to solve my problem.
+Unfortunately it's necessary to define in advance all the states and all the possible transitions between the various states. 
+Now, we are in a limited domain so the states are known, each represents a different arrangement of the blocks,
+so they are the combinations of the n blocks arranged in a limited number of ways, 
+the same holds for the transition functions between one state to another.
+
+
+**Initial Set in the atomspace:**  
+
+Example with only 2 blocks (A and B):
+
+```scheme
+;; All possible states
+(Concept "initial state")
+(Concept "A B clear")
+(Concept "A in hand B clear")
+(Concept "B in hand A clear")
+(Concept "A on B")
+(Concept "B on A")
+
+;; All possible transition from a state to another
+
+(List                                   ; pickup A
+    (Concept "A B clear")
+    (Concept "A in hand B clear"))
+(List                                   ; pickup B
+    (Concept "A B clear")
+    (Concept "B in hand A clear"))
+(List                                   ; putdown A
+    (Concept "A in hand B clear")
+    (Concept "A B clear"))
+(List                                   ; putdown B
+    (Concept "B in hand A clear")
+    (Concept "A B clear"))
+(List                                   ; stack A on B
+    (Concept "A in hand B clear")
+    (Concept "A on B"))
+(List                                   ; stack B on A
+    (Concept "B in hand A clear")
+    (Concept "B on A"))
+(List                                   ; unstack A on B
+    (Concept "A on B")          
+    (Concept "A in hand B clear"))
+(List                                   ; unstack B on A
+    (Concept "B on A")
+    (Concept "B in hand A clear"))
+    
+    
+;; Lock the initial state with the Anchor "Current State"
+;; and create the first transition function from "initial state" to the to the actual one (in this case "A B clear")
+(List
+    (Anchor "Current State")
+    (Concept "initial state"))
+(List
+    (Concept "initial state")
+    (Concept "A B clear"))
+
+;; List of old states crossed
+(ListLink
+    (Concept "initial state"))
+```
+
+**Goal Implementation:**  
+The goal will be one of the states (i.e. a certain arrangement of the blocks) 
+and the list of states to go through to reach it.
+I thought something like this:
+
+```scheme
+(define rbs (ConceptNode "blocks-world"))
+
+(define (compute_goal)
+    (define goal-state
+        (AndLink
+            (ListLink
+                (AnchorNode "Current State")
+                (ConceptNode "A on B")          ; my goal state (in this case)
+            )
+            (VariableNode "$all_old_states")
+        )
+    )
+    (define vardecl
+        (VariableList
+            (TypedVariableLink (VariableNode "old_states") (TypeNode "ListLink"))
+        )
+    )
+    (cog-bc rbs goal-state #:vardecl vardecl)
+)
+
+(define result (compute_goal))
+(display result)(newline)
+```
+Before explaining how it works, let's define the last thing that is the inference rules.
+
+**Inference rules:**  
+There are only 2 rules:
+
+1. "Take-one-step" rule:
+It coincides with the rule of the examples linked above, 
+the only difference is that it does not delete the old current state when it takes a step forward and
+also contains the list of past states.
+
+```scheme
+(define take-one-step  
+    (BindLink
+        (VariableList
+            (TypedVariableLink (VariableNode "$old-states") (TypeNode "ListLink"))
+            (TypedVariableLink (VariableNode "$curr-state") (TypeNode "ConceptNode"))
+            (TypedVariableLink (VariableNode "$next-state") (TypeNode "ConceptNode"))
+        )
+    (AndLink
+        (NotLink
+            (MemberLink
+                (VariableNode "$next-state")
+                    ;; ERROR: This pattern match should be limited to the "$old-states" variable 
+                    (BindLink
+                        (VariableList
+                            (TypedVariableLink (VariableNode "$A") (TypeNode "ConceptNode"))
+                            (TypedVariableLink (VariableNode "$B") (TypeNode "ListLink"))
+                        )
+                        (AndLink
+                            (ListLink
+                                (VariableNode "$A")
+                                (VariableNode "$B")
+                            )
+                        )
+                        (VariableNode "$A")
+                    )
+                )
+            )
+            (PresentLink
+                (AndLink
+                    (ListLink
+                        (AnchorNode "Current State")
+                        (VariableNode "$curr-state")
+                    )
+                    (ListLink
+                        (VariableNode "$curr-state")
+                        (VariableNode "$next-state")
+                    )
+                    (VariableNode "$old-states")
+                )
+            )
+        )
+        (ExecutionOutputLink
+            (GroundedSchemaNode "scm: action_step")
+            (ListLink
+                ;; ... then transition to the next state ...
+                (AndLink
+                    (ListLink
+                        (AnchorNode "Current State")
+                        (VariableNode "$next-state")
+                    )
+                    (VariableNode "$old-states")
+                )
+                (AndLink
+                    ;; If we are in the current state ...
+                    (ListLink
+                        (AnchorNode "Current State")
+                        (VariableNode "$curr-state")
+                    )
+                    ;; ... and there is a transition to another state...
+                    (ListLink
+                        (VariableNode "$curr-state")
+                        (VariableNode "$next-state")
+                    )
+                    (VariableNode "$old-states")
+                )
+            )
+        )
+    )
+)
+```
+
+2. "add-old-state" rule:
+It takes the effect of the first rule and adds the new transition function and 
+also adds the current state to the list of past states.  
+In this way the first rule, with all the correct preconditions, can be called again and
+so on with these two rules...
+
+```scheme
+(define add-old-state
+    (let* ((variables (gen-variables "$X" 3))
+        (vardecl 
+            (VariableList
+                (TypedVariableLink (car variables) (TypeNode "ListLink"))
+                (TypedVariableLink (car (cdr variables)) (TypeNode "ConceptNode"))
+                (TypedVariableLink (car (cdr (cdr variables))) (TypeNode "ConceptNode"))
+            )
+        )
+        (pattern
+            (PresentLink
+                (And
+                    (ListLink
+                        (AnchorNode "Current State")
+                        (car (cdr variables))
+                    )
+                    (ListLink
+                        (car (cdr variables))
+                        (car (cdr (cdr variables)))
+                    )
+                    (car variables)
+                )
+            )
+        )
+        (rewrite 
+            (ExecutionOutput
+                (GroundedSchema "scm: conjunction")
+                (List
+                    (And
+                        (ListLink
+                            (AnchorNode "Current State")
+                            (car (cdr variables))
+                        )
+                        (ListLink
+                            (car (cdr variables))
+                            (car (cdr (cdr variables)))
+                        )
+                        (Set (car (cdr variables)) (car variables))
+                    )
+                    (And
+                        (ListLink
+                            (AnchorNode "Current State")
+                            (car (cdr variables))
+                        )
+                        (car variables)
+                    )
+                )
+            )
+        ))
+        (Bind
+            vardecl
+            pattern
+            rewrite
+        )
+    )
+)
+```
+
+
+### IMPORTANT ###  
+Finally we come to the reasons for this structure. 
+The main idea of this implementation is that these two rules are called "infinitely" one after the other. 
+At each iteration, the path (≡ height of the derivation tree ≡ number of past states) increases by one state. 
+Moreover, from any state it is always possible to reach all the others in a finite number of steps. 
+This means that, with a sufficiently large number of iterations of the backward inference, 
+I will surely reach the correct length of the optimal path to pass from the starting state to the goal state.
+
+I've got an aside: I'm talking about an optimal path because the backward inference with variable filling 
+will surely find as the first solution (if it works) the path of minimum length, that is, 
+the one that avoids passing through useless states. 
+This is because the backward inference tries to replace all the variables with the available values and
+therefore it will necessarily also find the optimal solution.
+
+#### On a practical level: ####  
+The backward inference will make me a big BindLink containing all the calls to the rules etc ...
+This means I can't use code like (cog-outgoing-atom) and all functions of that type but I have to limit myself to atoms.
+This is the reason that makes the rules a little complicated and cumbersome.
+The main point of this is the "old-states" list.
+To find the optimal path of states to go through to reach my goal, I need to never go through the same state twice.
+So every time I take a step I have to check that the next state is not contained in the list of past states (the NotLink in the conditions of the first rule). 
+But this list changes as the rules are called! However, this does not happen when I backward inference because it is all contained within a single BindLink. 
+Consequently this list must necessarily be a VariableNode that I bring with me until the final goal.  
+And how should it be built?
+I believed this way:
+
+```scheme
+(List
+    (Concept "state-N")
+    (List
+
+      ;.........
+
+        (Concept "state-2")
+        (List
+            (Concept "state-1")
+            (List
+                (Concept "initial state")
+            )
+        )
+    )
+)
+```
+
+(This is because I have not found a better way I think) also is the reason for the NotLink built that way within the first rule. It extracts the ConceptNode states from the ListLinks although I would like the pattern match to be limited within the "old-states" variable but I don't know how to do it.
+I also don't know if this is conceptually correct.
+
+I haven't achieved a satisfactory result in either of the two implementations yet.
+
 ## RUN: ##
 - first terminal: 
 cogserver
 
 - second terminal: 
-rlwrap telnet localhost 17001; (load "path/to/file/test_pickup_stack.scm");
-
-
-
-
-
-3) Before talking about the problems that this writing (and the state-based alternative) has, I would like to talk about backward inference.
-
-Probably the implementation and functioning of URE is my biggest shortcoming 
-and also the reason why I don't find the right way to formulate and solve this problem. Some questions:
-
-3.1) I've always seen backward inference work via BindLink and VariableNode. I have no idea if there is an alternative/better way to do it.
-
-3.2) As Linas mentioned, BindLink requires PresentLink and this is one of the biggest problems. 
-By backward inference the rules are called and combine into a large BindLink and the same is true for the PresentLink. 
-In the end, you get a large PresentLink made up of all the PresentLinks of the called rules.
-This means that for example I cannot use atoms like
-
-; atom [0]
-(EvaluationLink
-               (PredicateNode "clear")
-               (VariableNode "? Ob"))
-; atom [1]
-(EvaluationLink
-               (PredicateNode "not-clear")
-               (VariableNode "? Ob"))
-
-because it doesn't make sense that the same block is both **clear** and **not-clear**.
-
-----------------------
-PS. this leads to another question: is what I am saying correct? I'll explain:
-Suppose I have 2 rules. One has the atom [0] in the PresentLink and the other has the atom [1].
-Suppose the rules are called in succession from backward inference.
-When is PresentLink evaluated? From what I've seen:
-
-1) the two rules compose the new BindLink, containing the PresentLink of both (which I think is the "Expanded forward chainer strategy")
-2) The BindLink is evaluated and then the solutions are found or not (which I think is the "Selected and-BIT for fulfillment")
-
-Then, only at the end, the PresentLink is evaluated, this implies that both atoms [0] and [1] must be present together in the atomspace.
-
-This is incorrect: "The PresentLink of each rule is evaluated when that rule is called." Right?
-----------------------
-
-That said, it wouldn't seem like a problem. Instead it is, 
-because it means that once the rule writes a new atom into the atomspace 
-then that atom will always be present and therefore the rule that uses that atom as a precondition can be called whenever it wants.
-Consequently , in example:
-
-- blocks A, B, C
-- initial arrangement: A **on** B, C on the table
-- goal: Variable ?ob **on** Variable ?underob
-
-Consequently, for example, the use of certain atoms is no longer good for trying to follow the physics of actions 
-(eg hand- **busy** and hand- **free**: I can only take an object if my hand is free). 
-The two atoms will always appear in the PresentLink and therefore, after doing a PICKUP and a PUTDOWN, 
-I can do two PICKUP in a row without worrying about having to put the object down first.
-So, you don't understand anything.
-But essentially the presence of certain atoms to limit the solutions to only physically correct sequences of actions does not work (or at least I have not been able to find a logic that fits).
-
-
-3.3) Mirror problem with unstack rule:
-
-First let's take a step back: 
-
-- blocks A, B, C
-- initial arrangement: A, B, C on the table
-- goal:
-            (AndLink
-               (ListLink
-                  (VariableNode "?ob")
-                  (VariableNode "?underob")
-               )
-               (NotLink (EqualLink (VariableNode "?ob") (VariableNode "?underob")))
-            )
-
-
-Backward inference could call the following rules in order: (conjunction joins two Links in a AndLink)
-
-(goal) <- conjunction <- stack <- conjunction <- pickup <- (init-set)
-
-
-
-(EvaluationLink (PredicateNode "clear")(VariableNode "?ob"))
-----------------------------------------pickup-action----------------------------------------
-(EvaluationLink (PredicateNode "in-hand") (VariableNode "?ob"))                                                 (EvaluationLink (PredicateNode "clear")(VariableNode "?underob"))
-==========================================================conjunction============================================================
-                                                                                                 (AndLink
-                                                                                                      (EvaluationLink
-                                                                                                         (PredicateNode "in-hand")
-                                                                                                         (VariableNode "?ob"))
-                                                                                                      (EvaluationLink
-                                                                                                         (PredicateNode "clear")
-                                                                                                         (VariableNode "?underob"))
-                                                                                                 )
-------------------------------------------------------------------------------------------------------- stack-action ----------------------------------
-                                                                                                 (ListLink
-                                                                                                    (VariableNode "?ob")                                             
-                                                                                                    (VariableNode "?underob")                                                               (NotLink (EqualLink (VariableNode "?ob") (VariableNode "?underob")))
-==========================================================conjunction=========================================================================================
-                                                                                                             (AndLink
-                                                                                                                (ListLink
-                                                                                                                   (VariableNode "?ob")
-                                                                                                                   (VariableNode "?underob")
-                                                                                                                )
-                                                                                                                (NotLink (EqualLink (VariableNode "?ob") (VariableNode "?underob")))
-                                                                                                             )
-
-
-and returns as a solution all the combinations of the 3 blocks one above the other two by two. 
-This is great, but analyzing the rules, then "unstack" would be of the form:
-
-
-                                                                                                 (ListLink
-                                                                                                    (VariableNode "?ob")
-                                                                                                    (VariableNode "?underob")     
------------------------------------------------------------------------------------------------------------------ unstack-action -----------------------------------------------------------------------------------------------------------------
-                                                                                                 (AndLink
-                                                                                                      (EvaluationLink
-                                                                                                         (PredicateNode "in-hand")
-                                                                                                         (VariableNode "?ob"))
-                                                                                                      (EvaluationLink
-                                                                                                         (PredicateNode "clear")
-                                                                                                         (VariableNode "?underob"))
-                                                                                                 )
-
-
-and now the trouble begins, because, as for the conjunction rule used for stack, then I need a disjunction for unstack rule, 
-
-                                                                                                 (AndLink
-                                                                                                      (EvaluationLink
-                                                                                                         (PredicateNode "in-hand")
-                                                                                                         (VariableNode "?ob"))
-                                                                                                      (EvaluationLink
-                                                                                                         (PredicateNode "clear")
-                                                                                                         (VariableNode "?underob"))
-                                                                                                 )
-==========================================================disjunction============================================================
-(EvaluationLink (PredicateNode "in-hand") (VariableNode "?ob"))                                                 (EvaluationLink (PredicateNode "clear")(VariableNode "?underob"))
-
-
-Which from what I know is not possible to have because there is always a single atom as an effect and a single atom as a precondition.
-But there should be something like the composition rule:
-
-Γ′⊢ψ                      Γ, ψ, Γ ”⊢ ∇
---------------------------------------------------
-           Γ, Γ ′, Γ′′⊢ ∇
-
-
-
-
-3.4) Finally, the last and I think the most important question: let's try to work by states.
-Well, I have tried many ways and I have not succeeded in any.
-Basically I found some shortcomings rather than logical errors.
-
-As has been said, the number of states for this problem is large to have them all in the atomspace (especially if we use a lot of blocks) and a waste because, based on the goal, 3/4 of the states would be useless.
-
-So there are 2 ideas (always in Atomese-pure):
-
-1) Find a rule that takes in (precondition) a state and an action and returns (effect) a new state.
-
-2) Find 4 rules (one for each action) that take in (precondition) a state and return (effect) a new one.
-
-So, first of all:
-
-- I could not give as a precondition: the last state created.
-The preconditions and effects of the rules are non-generic atoms. The only possibility I had thought was to have the input state as VariableNode, so that with fulfillment it would try all the atoms that represented my states.
-But this is not good because maybe after n actions, instead of taking the n-th state and creating the n + 1-th state, it could take the i-th state and create the n + 1-th state. And of course it is wrong because the i-th state is old and the layout of the blocks has certainly changed. (I hope it's clear enough)
-
-This led me to think that StateLink was a good atom for this purpose.
-- StateLink is unique, so it's fine as a precondition of my rule because it will definitely always represent the current situation of my blocks.
-Yet when I get a sequence of states as a solution to my inference, then in the PresentLink of my final BindLink all these states are required to be present in the atomspace. And this does not work (always confirming my initial assumption that the presence in the atomspace of the atoms contained in the PresentLink is verified at the time of fulfillment and not at the call of each rule), because all the StateLinks prior to the last one no longer exist, for StateLink definition.
-
-- I tried associating a Floats Value to the StateLink to represent the state of each block, so for example for each block one bit for "clear" / "not-clear", one bit for "in-hand" / "not-in -hand ", etc ...
-The idea was to change the status bits of an object as a rule was called on that object.
- I guess that's not good because:
-   - either the bits of the Value are the precondition and the effect of the rule, or the inference does not perceive their change during the calls of the various rules (if for example the flips of the bits occur in the GroundedSchemaNode)
-   - even if the bits of the Value were the precondition and the effect of the rule, there would still be the PresentLink problem. So once I have created the "can-pickup" state of block A, it will always be usable because it is inserted in the atomspace, even when A is no longer "pickable".
-
-
-
-
-
-4) Conclusions:
-I think something is missing from the current system to solve this problem (or I need some advice because I can't do it in any way)
-
-- The idea is a StateLink which however does not delete its old state but which keeps it in the atomspace. But somehow it can be called generically as a precondition of the rules, and this generic call always refers to the last StateLink created. (I saw that there was an obsolete atom: LatestLink, which maybe took over part of this operation)
-  
-So the operation would be (call this new atom LatestStateLink):
-
-(define choose-action
-   (BindLink
-      (VariableList
-         (TypedVariableLink (VariableNode "?ob") (TypeNode "ConceptNode"))
-      ) 
-      (PresentLink
-         (InheritanceLink
-            (VariableNode "?ob")
-            (ConceptNode "object"))
-         
-         (LatestStateLink "actual_state"
-               (ListLink (ConceptNode "?ob") (PredicateNode "state"))
-               (FloatValue 0 1 0 .....)
-            )
-      
-      )
-      (ExecutionOutputLink
-         (GroundedSchemaNode "scm: action")
-         (ListLink
-            ; effect:             
-            (LatestStateLink "actual_state"
-               (ListLink (ConceptNode "?ob") (PredicateNode "state"))
-               (FloatValue 1 1 1 .....)
-            )
-            ; precondition
-            (LatestStateLink "actual_state"
-               (ListLink (ConceptNode "?ob") (PredicateNode "state"))
-               (FloatValue 0 1 0 .....)
-            )
-         )
-      )
-   )
-)
-
-This is very similar to StateLink except for the name given to LatestStateLink. The idea is that the precondition for this rule is to check only the last state relative to the ?ob block and not the previous ones as well. If the last state, which I named "actual_state", has the FloatValue ​​corresponding to the required ones then the rule can be called, otherwise not.
-
-When the rule is called the effect is written on the atomspace and then a new LatestStateLink "actual_state" is added and the previous LatestStateLink is left in the atomspace losing the name (so that you have one and only one "actual_state").
-
-By doing this, it is possible to write rules in a generic way that respect the physics of actions and function in states.
-it's just a draft it will probably have other errors but it was one of the ideas that came to me.
+rlwrap telnet localhost 17001; (load "path/to/file/Blocksworld_FSM.scm");
