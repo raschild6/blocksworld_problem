@@ -157,7 +157,7 @@
 	)
 )
 
-(define rbs (ConceptNode "block-world"))
+(define rbs (ConceptNode "blocks-world"))
 
 (define (add-to-rule-base bindlink name rbs)
 	(DefineLink

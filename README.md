@@ -91,7 +91,7 @@ to move from the initial arrangement of the blocks to the desired one.
 
 ### 1. Model-Based ###
 
-**Initial Set in the atomspace**:  
+**Initial Set in the atomspace:**  
 An external algorithm detects all the blocks present on the table and their arrangement.  
 The model-based implementation tries to solve the problem using
 - Inference rules based on the 4 actions allowed by the manipulator robot
@@ -107,74 +107,91 @@ So taking example A, B, C, D on table my initial atomspace will be about
 
 ```scheme
 (SetLink
+
+    ; robot hand
+    (InheritanceLink (stv 1 1)
+        (ConceptNode "hand")
+        (ConceptNode "robot"))
+    (EvaluationLink (stv 1 1)
+        (PredicateNode "free")
+        (ConceptNode "hand"))
+
     ; block1
     (InheritanceLink (stv 1 1)
         (ConceptNode "block1")
         (ConceptNode "object"))
-
     (EvaluationLink (stv 1 1)
         (PredicateNode "clear")
         (ConceptNode "block1"))
-
-    ; block2 
+    (EvaluationLink (stv 1 1)
+        (PredicateNode "on-table")
+        (ConceptNode "block1"))
+        
+    ; block2, block3, block4 (same as block1)
     ; ....
     
     ; differentiate the various blocks
     (NotLink (EqualLink (ConceptNode "block1") (ConceptNode "block2")))
+    (NotLink (EqualLink (ConceptNode "block1") (ConceptNode "block3")))
+    (NotLink (EqualLink (ConceptNode "block1") (ConceptNode "block4")))
+    ; ....
 )
 ```
 
-- Goal Implementation:
-it completely depends on how the model is formulated.
-If you look for a state resolution (finite state machine type) the goal will be formulated as one of them.
-Alternative: in the end, each block will always be on top of something (table or other block) so a possible goal formulation would be like:
+**Goal Implementation:**  
+Each block will always be on top of something (table or other block).   
+For example, if a possible goal is: block2 **on-table**, block1 **on** block3,  
+then a possible Atomese goal formulation would be like:  
 
-(define (compute)
+
+```scheme
+(define rbs (ConceptNode "blocks-world"))
+
+(define (compute_goal)
    (define goal-state
       (AndLink
-         (ListLink
-            (VariableNode "$ A")
-            (VariableNode "$ B")
+         (EvaluationLink
+            (PredicateNode "on-table")
+            (VariableNode "$A")
          )
          (ListLink
-            (VariableNode "$ B")
-            (VariableNode "$ C")
+            (VariableNode "$B")
+            (VariableNode "$C")
          )
-         (NotLink (EqualLink (VariableNode "$ A") (VariableNode "$ B")))
-         (NotLink (EqualLink (VariableNode "$ A") (VariableNode "$ C")))
-         (NotLink (EqualLink (VariableNode "$ B") (VariableNode "$ C")))
+         (NotLink (EqualLink (VariableNode "$A") (VariableNode "$B")))
+         (NotLink (EqualLink (VariableNode "$A") (VariableNode "$C")))
+         (NotLink (EqualLink (VariableNode "$B") (VariableNode "$C")))
       )
    )
    (define vardecl
       (VariableList
-         (TypedVariableLink
-            (VariableNode "$ A")
-            (TypeNode "ConceptNode"))
-         (TypedVariableLink
-            (VariableNode "$ B")
-            (TypeNode "ConceptNode"))
-         (TypedVariableLink
-            (VariableNode "$ C")
-            (TypeNode "ConceptNode"))
-         (TypedVariableLink
-            (VariableNode "$ D")
-            (TypeNode "ConceptNode"))
+         (TypedVariableLink (VariableNode "$A") (TypeNode "ConceptNode"))
+         (TypedVariableLink (VariableNode "$B") (TypeNode "ConceptNode"))
+         (TypedVariableLink (VariableNode "$C") (TypeNode "ConceptNode"))
       )
    )
    (cog-bc rbs goal-state #: vardecl vardecl)
 )
+(define result (compute_goal))
+(display result)(newline)
+```
+Notice that (ListLink (VariableNode "$B") (VariableNode "$C")) means that the $B block is on top of the $C block (STACK of $B on $C).  
+Moreover, the backward inference will find ALL possible combinations of blocks that can be arranged in that way.  
 
-- Rules for inference:
-Same considerations made for the formulation of the goal.
-Let's start with the rules corresponding to the 4 robot actions and leave out extra rules.
-If we rely on the definition above, then for example the STACK rule would be something like:
 
+**Inference rules:**  
+Based on the definitions of the 4 actions given above, there should be a rule for each action, 
+plus some auxiliary rule (like conjunction I think).  
+In the file related to this approach there are all 4 rules, which match their definitions.  
+This is an example of the STACK rule, that it would be something like:
+
+```scheme
 (define stack
    (BindLink
       (VariableList
          (TypedVariableLink (VariableNode "?ob") (TypeNode "ConceptNode"))
          (TypedVariableLink (VariableNode "?underob") (TypeNode "ConceptNode"))
-      ) ; parameters
+      )
       (PresentLink
          (NotLink
             (EqualLink (VariableNode "?ob") (VariableNode "?underob")))
@@ -196,7 +213,7 @@ If we rely on the definition above, then for example the STACK rule would be som
       (ExecutionOutputLink
          (GroundedSchemaNode "scm: stack-action")
          (ListLink
-            ; effect:              this represent ?ob "on" ?underob
+            ; effect:
             (ListLink
                (VariableNode "?ob")
                (VariableNode "?underob")
@@ -214,6 +231,8 @@ If we rely on the definition above, then for example the STACK rule would be som
       )
    )
 )
+```
+
 ## RUN: ##
 - first terminal: 
 cogserver
