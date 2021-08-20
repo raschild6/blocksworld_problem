@@ -1,6 +1,7 @@
 # Blocksworld Problem #
 
 My problem is based on the classic problem called [blocksworld problem](https://en.wikipedia.org/wiki/Blocks_world#:~:text=In%20its%20basic%20form%2C%20the,different%20sizes%2C%20shapes%20and%20colors.).
+There is also the definition of the problem in the PDDL format in the domain.pddl and problem.pddl files
 
 In detail, my configuration is:
  
@@ -89,7 +90,7 @@ to move from the initial arrangement of the blocks to the desired one.
 ### Two Possible Implementations: ###
 (note that I'm looking for an Atomese-pure implementation)
 
-### 1. Model-Based ###
+### 1. Model-Based (the file is missing, I will upload it soon) ###
 
 **Initial Set in the atomspace:**  
 An external algorithm detects all the blocks present on the table and their arrangement.  
