@@ -7,10 +7,6 @@
 ;; SCM action
 (define (action_step . args)
 	(define effect (car args))
-	(define precond (car (cdr args)))
-	(newline)(display "STEP ----- ")(newline)
-	(display "****** Precondition ****** ")(newline)
-	(display precond)
 	effect
 )
 (define (conjunction . args)
@@ -27,7 +23,7 @@
 	(BindLink
 		;; We will need to find the current and the next state
 		(VariableList
-			(TypedVariableLink (VariableNode "$old-states") (TypeNode "SetLink"))
+			(TypedVariableLink (VariableNode "$old-states") (TypeNode "ListLink"))
 			(TypedVariableLink (VariableNode "$curr-state") (TypeNode "ConceptNode"))
 	   	(TypedVariableLink (VariableNode "$next-state") (TypeNode "ConceptNode"))
 		)
@@ -35,19 +31,16 @@
 			(NotLink
 				(MemberLink
 					(VariableNode "$next-state")
+				 	;; ERROR: This pattern match should be limited only to the "$old-states" variable 
 					(BindLink
   						(VariableList
   							(TypedVariableLink (VariableNode "$A") (TypeNode "ConceptNode"))
-  							(TypedVariableLink (VariableNode "$B") (TypeNode "SetLink"))
+  							(TypedVariableLink (VariableNode "$B") (TypeNode "ListLink"))
   						)
   						(AndLink
 							(SetLink
 								(VariableNode "$A")
 								(VariableNode "$B")
-							)
-							(EqualLink
-								(VariableNode "$B")
-								(VariableNode "$old-states")
 							)
 						)
 						(VariableNode "$A")
@@ -140,7 +133,7 @@
 							(car (cdr variables))
 							(car (cdr (cdr variables)))
 						)
-						(Set (car (cdr variables)) (car variables))
+						(List (car (cdr variables)) (car variables))
 					)
 					(And
 						(ListLink
@@ -236,14 +229,14 @@
    	(AndLink
 			(ListLink
 				(AnchorNode "Current State")
-				(ConceptNode "A on B")
+				(ConceptNode "A on B")		; my goal state (in this case)
 			)
-			(VariableNode "$all_old_states")
+			(VariableNode "$old_states")
 		)
 	)
 	(define vardecl
 		(VariableList
-			(TypedVariableLink (VariableNode "all_old_states") (TypeNode "SetLink"))
+			(TypedVariableLink (VariableNode "$old_states") (TypeNode "ListLink"))
 		)
 	)
    (cog-bc rbs goal-state #:vardecl vardecl)
