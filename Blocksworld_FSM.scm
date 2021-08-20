@@ -97,7 +97,7 @@
 	(let* ((variables (gen-variables "$X" 3))
 		(vardecl
 			(VariableList
-				(TypedVariableLink (car variables) (TypeNode "SetLink"))
+				(TypedVariableLink (car variables) (TypeNode "ListLink"))
 				(TypedVariableLink (car (cdr variables)) (TypeNode "ConceptNode"))
 				(TypedVariableLink (car (cdr (cdr variables))) (TypeNode "ConceptNode"))
 			)
