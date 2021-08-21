@@ -209,7 +209,8 @@
 
 ;; List of old states crossed
 (ListLink
-	(Concept "initial state"))
+	(Concept "initial state")
+ 	(List))				;; add an empty List to also match the "initial state" in the conditional part of the first rule
 
 
 ;; ----------- URE parameters -----------
