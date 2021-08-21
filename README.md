@@ -461,7 +461,7 @@ so on with these two rules...
                             (car (cdr variables))
                             (car (cdr (cdr variables)))
                         )
-                        (Set (car (cdr variables)) (car variables))
+                        (List (car (cdr variables)) (car variables))
                     )
                     (And
                         (ListLink
