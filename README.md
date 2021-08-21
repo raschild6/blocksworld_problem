@@ -326,7 +326,7 @@ I thought something like this:
     )
     (define vardecl
         (VariableList
-            (TypedVariableLink (VariableNode "all_old_states") (TypeNode "ListLink"))
+            (TypedVariableLink (VariableNode "$all_old_states") (TypeNode "ListLink"))
         )
     )
     (cog-bc rbs goal-state #:vardecl vardecl)
