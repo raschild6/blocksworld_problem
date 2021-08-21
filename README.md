@@ -498,14 +498,14 @@ This is because the backward inference tries to replace all the variables with t
 therefore it will necessarily also find the optimal solution.
 
 #### On a practical level: ####  
-The backward inference will make me a big BindLink containing all the calls to the rules etc ...
-This means I can't use code like (cog-outgoing-atom) and all functions of that type but I have to limit myself to atoms.
+The backward inference will create a big BindLink containing all the calls to the rules etc ...
+This means I can't use code like (cog-outgoing-atom) and all such functions, but I have to limit to atoms.
 This is the reason that makes the rules a little complicated and cumbersome.
 The main point of this is the "old-states" list.
 To find the optimal path of states to go through to reach my goal, I need to never go through the same state twice.
-So every time I take a step I have to check that the next state is not contained in the list of past states (the NotLink in the conditions of the first rule). 
-But this list changes as the rules are called! However, this does not happen when I backward inference because it is all contained within a single BindLink. 
-Consequently this list must necessarily be a VariableNode that I bring with me until the final goal.  
+So everytime I take a step, I have to check that the next state is not contained in the list of past states (the NotLink in the conditions of the first rule). 
+But this list changes as rules are called! However, these changes don't happen when I do backward inference because the execution will happen upon completion of the single final large BindLink.  
+Consequently this list must necessarily be a VariableNode that I bring with me in each call of the rule until the final goal.   
 And how should it be built?
 I believed this way:
 
@@ -526,8 +526,62 @@ I believed this way:
     )
 )
 ```
+Thus, in the evaluation of the conditions of the final BindLink, there will be the contrasts between each next_state and the previous ones relating to that state.
+Practically, each list for each take-one-step:
 
-(This is because I have not found a better way I think) also is the reason for the NotLink built that way within the first rule. It extracts the ConceptNode states from the ListLinks although I would like the pattern match to be limited within the "old-states" variable but I don't know how to do it.
+```scheme
+;; variable "$old-state-1"
+(List
+    (Concept "initial state")
+)
+
+;; variable "$old-state-2"
+(List
+    (Concept "1")
+    (Variable "$old-state-1")
+)
+
+;; variable "$old-state-3"
+(List
+    (Concept "2")
+    (Variable "$old-state-2")
+)
+
+;; and so on until final state
+(List
+    (Concept "final_state")
+    (Variable "$old-state-n")
+)
+```
+
+and so the final conditions in the last BindLink, it should be / I would like it to be:
+
+```scheme
+(AndLink
+    (NotLink
+        (MemberLink
+            (VariableNode "$next-state-1")
+            (VariableNode "$old-state-1")
+        )
+    )
+    (NotLink
+        (MemberLink
+            (VariableNode "$next-state-2")
+            (VariableNode "$old-state-2")
+        )
+    )
+    (NotLink
+        (MemberLink
+            (VariableNode "$next-state-3")
+            (VariableNode "$old-state-3")
+        )
+    )
+    
+;; ......
+```
+
+(This is because I have not found a better way I think)  
+This is the reason for the NotLink built that way within the first rule. It should extract the ConceptNode states from the ListLinks which corresponds to the relative "old-states-i" variable but I don't know how to do it.
 I also don't know if this is conceptually correct.
 
 I haven't achieved a satisfactory result in either of the two implementations yet.
