@@ -529,6 +529,7 @@ Practically, each list for each take-one-step:
 ;; variable "$old-state-1"
 (List
     (Concept "initial state")
+    (List)                       ;; add an empty List to also match the "initial state" in the conditional part of the second rule
 )
 
 ;; variable "$old-state-2"
