@@ -519,6 +519,7 @@ I believed this way:
             (Concept "state-1")
             (List
                 (Concept "initial state")
+                (List)                       ;; add an empty List to also match the "initial state" in the conditional part of the first rule
             )
         )
     )
