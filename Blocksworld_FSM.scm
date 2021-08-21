@@ -119,9 +119,6 @@
 		(rewrite
 			(ExecutionOutput
 				(GroundedSchema "scm: conjunction")
-				;; We wrap the variables in Set because the order
-				;; doesn't matter and that way alpha-conversion
-				;; works better.
 				(List
 					(And
 						(ListLink
