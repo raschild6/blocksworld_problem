@@ -304,7 +304,7 @@ Example with only 2 blocks (A and B):
 ;; List of old states crossed
 (ListLink
     (Concept "initial state")
-    (List))                          ;; add an empty List to also match the "initial state" in the conditional part of the first rule
+    (List))                          ;; add an empty List to also match the "initial state" in the conditional part of the second rule
 ```
 
 **Goal Implementation:**  
@@ -354,36 +354,17 @@ also contains the list of past states.
             (TypedVariableLink (VariableNode "$curr-state") (TypeNode "ConceptNode"))
             (TypedVariableLink (VariableNode "$next-state") (TypeNode "ConceptNode"))
         )
-    (AndLink
-        (NotLink
-            (MemberLink
-                (VariableNode "$next-state")
-                    ;; ERROR: This pattern match should be limited to the "$old-states" variable 
-                    (BindLink
-                        (VariableList
-                            (TypedVariableLink (VariableNode "$A") (TypeNode "ConceptNode"))
-                            (TypedVariableLink (VariableNode "$B") (TypeNode "ListLink"))
-                        )
-                        (ListLink
-                            (VariableNode "$A")
-                            (VariableNode "$B")
-                        )
-                        (VariableNode "$A")
-                    )
+        (PresentLink
+            (AndLink
+                (ListLink
+                    (AnchorNode "Current State")
+                    (VariableNode "$curr-state")
                 )
-            )
-            (PresentLink
-                (AndLink
-                    (ListLink
-                        (AnchorNode "Current State")
-                        (VariableNode "$curr-state")
-                    )
-                    (ListLink
-                        (VariableNode "$curr-state")
-                        (VariableNode "$next-state")
-                    )
-                    (VariableNode "$old-states")
+                (ListLink
+                    (VariableNode "$curr-state")
+                    (VariableNode "$next-state")
                 )
+                (VariableNode "$old-states")
             )
         )
         (ExecutionOutputLink
@@ -424,58 +405,73 @@ so on with these two rules...
 
 ```scheme
 (define add-old-state
-    (let* ((variables (gen-variables "$X" 3))
-        (vardecl 
-            (VariableList
-                (TypedVariableLink (car variables) (TypeNode "ListLink"))
-                (TypedVariableLink (car (cdr variables)) (TypeNode "ConceptNode"))
-                (TypedVariableLink (car (cdr (cdr variables))) (TypeNode "ConceptNode"))
-            )
+    (Bind
+        (VariableList
+            (TypedVariableLink (VariableNode "$old-states") (TypeNode "ListLink"))
+            (TypedVariableLink (VariableNode "$curr-state") (TypeNode "ConceptNode"))
+            (TypedVariableLink (VariableNode "$next-state") (TypeNode "ConceptNode"))
         )
-        (pattern
+        (And
+            ;; check that "$next-state" has never been found before
+            (NotLink
+                (MemberLink
+                    (VariableNode "$next-state")
+                    ;; ERROR: This pattern match should be into the "$old-states" variable (not on the Atomspace)
+                    (BindLink
+                        (VariableList
+                            (TypedVariableLink (VariableNode "$A") (TypeNode "ConceptNode"))
+                            (TypedVariableLink (VariableNode "$B") (TypeNode "ListLink"))
+                        )
+                        (ListLink
+                            (VariableNode "$A")
+                            (VariableNode "$B")
+                        )
+                        (VariableNode "$A")
+                    )
+                )
+            )
             (PresentLink
+                ;; check for an admissible transition function
+                (ListLink
+                    (VariableNode "$curr-state")
+                    (VariableNode "$next-state")
+                )
                 (And
                     (ListLink
                         (AnchorNode "Current State")
-                        (car (cdr variables))
+                        (VariableNode "$curr-state")
                     )
-                    (ListLink
-                        (car (cdr variables))
-                        (car (cdr (cdr variables)))
-                    )
-                    (car variables)
+                    (VariableNode "$old-states")
                 )
             )
         )
-        (rewrite 
-            (ExecutionOutput
-                (GroundedSchema "scm: conjunction")
-                (List
-                    (And
-                        (ListLink
-                            (AnchorNode "Current State")
-                            (car (cdr variables))
-                        )
-                        (ListLink
-                            (car (cdr variables))
-                            (car (cdr (cdr variables)))
-                        )
-                        (List (car (cdr variables)) (car variables))
+        (ExecutionOutput
+            (GroundedSchema "scm: conjunction")
+            (List
+                (And
+                    (ListLink
+                        (AnchorNode "Current State")
+                        (VariableNode "$curr-state")
                     )
-                    (And
-                        (ListLink
-                            (AnchorNode "Current State")
-                            (car (cdr variables))
-                        )
-                        (car variables)
+                    ;; admissible transition function
+                    (ListLink
+                        (VariableNode "$curr-state")
+                        (VariableNode "$next-state")
+                    )
+                    ;; add "curr-state" to the "old-state" list
+                    (List 
+                        (VariableNode "$curr-state") 
+                        (VariableNode "$old-states")
                     )
                 )
+                (And
+                    (ListLink
+                        (AnchorNode "Current State")
+                        (VariableNode "$curr-state")
+                    )
+                    (VariableNode "$old-states")
+                )
             )
-        ))
-        (Bind
-            vardecl
-            pattern
-            rewrite
         )
     )
 )
@@ -502,7 +498,7 @@ This means I can't use code like (cog-outgoing-atom) and all such functions, but
 This is the reason that makes the rules a little complicated and cumbersome.
 The main point of this is the "old-states" list.
 To find the optimal path of states to go through to reach my goal, I need to never go through the same state twice.
-So everytime I take a step, I have to check that the next state is not contained in the list of past states (the NotLink in the conditions of the first rule). 
+So everytime I take a step, I have to check that the next state is not contained in the list of past states (the NotLink in the conditions of the second rule). 
 But this list changes as rules are called! However, these changes don't happen when I do backward inference because the execution will happen upon completion of the single final large BindLink.  
 Consequently this list must necessarily be a VariableNode that I bring with me in each call of the rule until the final goal.   
 And how should it be built?
@@ -520,7 +516,7 @@ I believed this way:
             (Concept "state-1")
             (List
                 (Concept "initial state")
-                (List)                       ;; add an empty List to also match the "initial state" in the conditional part of the first rule
+                (List)                       ;; add an empty List to also match the "initial state" in the conditional part of the second rule
             )
         )
     )
@@ -582,7 +578,7 @@ and so the final conditions in the last BindLink, it should be / I would like it
 
 Where the "next-state-i" Variable is compared with all the Concept nested within "old-state-i".  
 (This is because I have not found a better way I think)  
-This is the reason for the NotLink built that way within the first rule. It should extract the ConceptNode states from the ListLinks which corresponds to the relative "old-states-i" variable but I don't know how to do it.
+This is the reason for the NotLink built that way within the second rule. It should extract the ConceptNode states from the ListLinks which corresponds to the relative "old-states-i" variable but I don't know how to do it.
 I also don't know if this is conceptually correct.
 
 I haven't achieved a satisfactory result in either of the two implementations yet.

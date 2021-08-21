@@ -21,42 +21,22 @@
 ;;
 (define take-one-step
 	(BindLink
-		;; We will need to find the current and the next state
 		(VariableList
 			(TypedVariableLink (VariableNode "$old-states") (TypeNode "ListLink"))
 			(TypedVariableLink (VariableNode "$curr-state") (TypeNode "ConceptNode"))
 	   	(TypedVariableLink (VariableNode "$next-state") (TypeNode "ConceptNode"))
 		)
-		(AndLink
-			(NotLink
-				(MemberLink
+		(PresentLink
+			(AndLink
+				(ListLink
+					(AnchorNode "Current State")
+					(VariableNode "$curr-state")
+				)
+				(ListLink
+					(VariableNode "$curr-state")
 					(VariableNode "$next-state")
-				 	;; ERROR: This pattern match should be limited only to the "$old-states" variable, 
-					(BindLink
-  						(VariableList
-  							(TypedVariableLink (VariableNode "$A") (TypeNode "ConceptNode"))
-  							(TypedVariableLink (VariableNode "$B") (TypeNode "ListLink"))
-  						)
-						(ListLink
-							(VariableNode "$A")
-							(VariableNode "$B")
-						)
-						(VariableNode "$A")
-	 	 			)
 				)
-			)
-			(PresentLink
-				(AndLink
-					(ListLink
-						(AnchorNode "Current State")
-						(VariableNode "$curr-state")
-					)
-					(ListLink
-						(VariableNode "$curr-state")
-						(VariableNode "$next-state")
-					)
-					(VariableNode "$old-states")
-				)
+				(VariableNode "$old-states")
 			)
 		)
 		(ExecutionOutputLink
@@ -89,61 +69,75 @@
 )
 
 
-;; Add-Old-State-To-List rule:
+;; Add-Current-State-To-Old-State-List rule:
 ;;
 (define add-old-state
-	(let* ((variables (gen-variables "$X" 3))
-		(vardecl
-			(VariableList
-				(TypedVariableLink (car variables) (TypeNode "ListLink"))
-				(TypedVariableLink (car (cdr variables)) (TypeNode "ConceptNode"))
-				(TypedVariableLink (car (cdr (cdr variables))) (TypeNode "ConceptNode"))
-			)
+	(Bind
+		(VariableList
+			(TypedVariableLink (VariableNode "$old-states") (TypeNode "ListLink"))
+			(TypedVariableLink (VariableNode "$curr-state") (TypeNode "ConceptNode"))
+			(TypedVariableLink (VariableNode "$next-state") (TypeNode "ConceptNode"))
 		)
-		(pattern
+		(And
+			(NotLink
+				(MemberLink
+					(VariableNode "$next-state")
+				  	;; ERROR: This pattern match should be into the "$old-states" variable (not on the Atomspace)
+					(BindLink
+						(VariableList
+							(TypedVariableLink (VariableNode "$A") (TypeNode "ConceptNode"))
+							(TypedVariableLink (VariableNode "$B") (TypeNode "ListLink"))
+						)
+						(ListLink
+							(VariableNode "$A")
+							(VariableNode "$B")
+						)
+						(VariableNode "$A")
+					)
+				)
+			)
 			(PresentLink
+				;; check for an admissible transition function
+				(ListLink
+					(VariableNode "$curr-state")
+					(VariableNode "$next-state")
+				)
 				(And
 					(ListLink
 						(AnchorNode "Current State")
-						(car (cdr variables))
+						(VariableNode "$curr-state")
 					)
-					(ListLink
-						(car (cdr variables))
-						(car (cdr (cdr variables)))
-					)
-					(car variables)
+					(VariableNode "$old-states")
 				)
 			)
 		)
-		(rewrite
-			(ExecutionOutput
-				(GroundedSchema "scm: conjunction")
-				(List
-					(And
-						(ListLink
-							(AnchorNode "Current State")
-							(car (cdr variables))
-						)
-						(ListLink
-							(car (cdr variables))
-							(car (cdr (cdr variables)))
-						)
-						(List (car (cdr variables)) (car variables))
+		(ExecutionOutput
+			(GroundedSchema "scm: conjunction")
+			(List
+				(And
+					(ListLink
+						(AnchorNode "Current State")
+						(VariableNode "$curr-state")
 					)
-					(And
-						(ListLink
-							(AnchorNode "Current State")
-							(car (cdr variables))
-						)
-						(car variables)
+					;; admissible transition function
+					(ListLink
+						(VariableNode "$curr-state")
+						(VariableNode "$next-state")
+					)
+					;; add "curr-state" to the "old-state" list
+					(List
+						(VariableNode "$curr-state")
+						(VariableNode "$old-states")
 					)
 				)
+				(And
+					(ListLink
+						(AnchorNode "Current State")
+						(VariableNode "$curr-state")
+					)
+					(VariableNode "$old-states")
+				)
 			)
-		))
-		(Bind
-			vardecl
-			pattern
-			rewrite
 		)
 	)
 )
@@ -203,14 +197,15 @@
 (List
 	(Anchor "Current State")
 	(Concept "initial state"))
+;; add the first transition function from fake state ("initial state") to the real state (for example "A B clear")
 (List
 	(Concept "initial state")
 	(Concept "A B clear"))
 
 ;; List of old states crossed
-(ListLink
+(List
 	(Concept "initial state")
- 	(List))				;; add an empty List to also match the "initial state" in the conditional part of the first rule
+	(List))
 
 
 ;; ----------- URE parameters -----------
@@ -241,6 +236,7 @@
 ;; ----------- Start Backward Inference -----------
 (define result (compute_goal))
 (display result)(newline)
+
 
 
 
