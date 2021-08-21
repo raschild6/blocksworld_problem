@@ -578,6 +578,7 @@ and so the final conditions in the last BindLink, it should be / I would like it
 ;; ......
 ```
 
+Where the "next-state-i" Variable is compared with all the Concept nested within "old-state-i".  
 (This is because I have not found a better way I think)  
 This is the reason for the NotLink built that way within the first rule. It should extract the ConceptNode states from the ListLinks which corresponds to the relative "old-states-i" variable but I don't know how to do it.
 I also don't know if this is conceptually correct.
