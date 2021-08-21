@@ -358,16 +358,15 @@ also contains the list of past states.
             (MemberLink
                 (VariableNode "$next-state")
                     ;; ERROR: This pattern match should be limited to the "$old-states" variable 
+                    ;; Moreover it returns a SetLink, instead I would like a ListLink so that MemberLink is evaluated correctly
                     (BindLink
                         (VariableList
                             (TypedVariableLink (VariableNode "$A") (TypeNode "ConceptNode"))
                             (TypedVariableLink (VariableNode "$B") (TypeNode "ListLink"))
                         )
-                        (AndLink
-                            (ListLink
-                                (VariableNode "$A")
-                                (VariableNode "$B")
-                            )
+                        (ListLink
+                            (VariableNode "$A")
+                            (VariableNode "$B")
                         )
                         (VariableNode "$A")
                     )
