@@ -38,7 +38,7 @@
   							(TypedVariableLink (VariableNode "$B") (TypeNode "ListLink"))
   						)
   						(AndLink
-							(SetLink
+							(ListLink
 								(VariableNode "$A")
 								(VariableNode "$B")
 							)
